@@ -1,0 +1,2 @@
+This is a test file for Huffman compression algorithm. 1234567890
+

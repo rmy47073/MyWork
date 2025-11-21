@@ -307,6 +307,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
 }
 
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
+    (void)hPrevInstance;  // 未使用的参数
+    (void)lpCmdLine;      // 未使用的参数
     // 注册窗口类
     WNDCLASSA wc = {};
     wc.lpfnWndProc = WindowProc;
