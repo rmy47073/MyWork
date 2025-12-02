@@ -7,7 +7,6 @@
 #include <cstring>
 #include <cstdint>
 #include <climits>
-#include <algorithm>
 
 using namespace std;
 namespace fs = filesystem;
@@ -26,8 +25,7 @@ using HuffmanCode = char**;
 
 // 从数组中选择两个权重最小且parent为0的节点
 void Select(HTNode* HT, int n, int& s1, int& s2) {
-    uint64_t min1 = ULLONG_MAX;
-    uint64_t min2 = ULLONG_MAX;
+    uint64_t min1 = ULLONG_MAX, min2 = ULLONG_MAX;
     s1 = s2 = 0;
     
     for (int i = 1; i <= n; ++i) {
@@ -45,17 +43,17 @@ void Select(HTNode* HT, int n, int& s1, int& s2) {
     }
 }
 
-// 基于有序频率列表构建霍夫曼树并生成编码
-void HuffmanCodingFromList(HTNode*& HT, HuffmanCode& HC,
-                           const vector<pair<unsigned char, uint64_t>>& freqList, int n) {
+// 构建霍夫曼树并生成编码（基于图片算法思想）
+void HuffmanCoding(HTNode*& HT, HuffmanCode& HC, 
+                  const unordered_map<unsigned char, uint64_t>& freqMap, int n) {
     if (n <= 0) return;
-
+    
     int m = 2 * n - 1;  // 总节点数 = 2n-1
     HT = new HTNode[m + 1];  // 下标从1开始
-
-    // 1. 初始化叶子节点（前n个节点，顺序由 freqList 决定）
+    
+    // 1. 初始化叶子节点（前n个节点）
     int i = 1;
-    for (const auto& pair : freqList) {
+    for (const auto& pair : freqMap) {
         HT[i].weight = pair.second;
         HT[i].data = pair.first;
         HT[i].parent = 0;
@@ -63,38 +61,43 @@ void HuffmanCodingFromList(HTNode*& HT, HuffmanCode& HC,
         HT[i].rchild = 0;
         ++i;
     }
-
+    
     // 初始化非叶子节点
     for (i = n + 1; i <= m; ++i) {
         HT[i].weight = 0;
         HT[i].parent = 0;
         HT[i].lchild = 0;
         HT[i].rchild = 0;
-        HT[i].data = 0;
     }
-
+    
     // 2. 构建霍夫曼树
     for (i = n + 1; i <= m; ++i) {
         int s1, s2;
         Select(HT, i - 1, s1, s2);  // 选择两个最小权重节点
-
+        
         HT[s1].parent = i;
         HT[s2].parent = i;
         HT[i].lchild = s1;
         HT[i].rchild = s2;
         HT[i].weight = HT[s1].weight + HT[s2].weight;
     }
-
+    
     // 3. 从叶子到根逆向求每个字符的霍夫曼编码
     HC = new char*[n + 1];  // 存储n个字符的编码
     char* cd = new char[n];  // 临时存放编码
     cd[n - 1] = '\0';       // 编码结束符
-
+    
+    // 建立字节到索引的映射（方便后续查找）
+    unordered_map<unsigned char, int> dataToIndex;
+    for (i = 1; i <= n; ++i) {
+        dataToIndex[HT[i].data] = i;
+    }
+    
     for (i = 1; i <= n; ++i) {
         int start = n - 1;  // 编码起始位置
         int c = i;
         int f = HT[i].parent;
-
+        
         // 从叶子节点向上遍历到根
         while (f != 0) {
             --start;
@@ -106,37 +109,20 @@ void HuffmanCodingFromList(HTNode*& HT, HuffmanCode& HC,
             c = f;
             f = HT[f].parent;
         }
-
+        
         // 保存编码
         HC[i] = new char[n - start];
         strcpy(HC[i], &cd[start]);
     }
-
+    
     delete[] cd;
-}
-
-// 构建霍夫曼树并生成编码（基于图片算法思想）
-void HuffmanCoding(HTNode*& HT, HuffmanCode& HC, 
-                  const unordered_map<unsigned char, uint64_t>& freqMap, int n) {
-    // 旧接口保留，但内部先把无序map转换成按字节值排序的有序列表，
-    // 保证压缩和解压时构建完全相同的霍夫曼树
-    vector<pair<unsigned char, uint64_t>> freqList(freqMap.begin(), freqMap.end());
-    sort(freqList.begin(), freqList.end(),
-         [](const auto& a, const auto& b) { return a.first < b.first; });
-    HuffmanCodingFromList(HT, HC, freqList, n);
 }
 
 // 读取文件并统计字节频率
 bool readFileAndCountFreq(const string& inputPath, vector<unsigned char>& fileData, 
                          unordered_map<unsigned char, uint64_t>& freqMap) {
-    try {
-        if (!fs::exists(inputPath)) {
-            cerr << "错误：文件不存在: " << inputPath << endl;
-            return false;
-        }
-    } catch (const fs::filesystem_error& e) {
-        cerr << "错误：无法处理输入路径（可能是路径中包含特殊/非UTF-8字符）" << endl;
-        cerr << "建议：先把文件拷贝到一个只包含英文和数字的路径下再试。" << endl;
+    if (!fs::exists(inputPath)) {
+        cerr << "错误：文件不存在: " << inputPath << endl;
         return false;
     }
     
@@ -175,16 +161,10 @@ bool compressFile(const string& inputPath, const string& outputPath) {
         return false;
     }
 
-    // 将频率表按字节值排序，保证顺序确定
-    vector<pair<unsigned char, uint64_t>> freqList(freqMap.begin(), freqMap.end());
-    sort(freqList.begin(), freqList.end(),
-         [](const auto& a, const auto& b) { return a.first < b.first; });
-    n = static_cast<int>(freqList.size());
-
-    // 构建霍夫曼树和编码表（使用确定顺序的频率列表）
+    // 构建霍夫曼树和编码表
     HTNode* HT = nullptr;
     HuffmanCode HC = nullptr;
-    HuffmanCodingFromList(HT, HC, freqList, n);
+    HuffmanCoding(HT, HC, freqMap, n);
 
     // 创建字节到编码的映射
     unordered_map<unsigned char, string> codeMap;
@@ -202,15 +182,12 @@ bool compressFile(const string& inputPath, const string& outputPath) {
     }
 
     // 写入频率表大小和频率表
-    uint16_t freqMapSize = static_cast<uint16_t>(n);
+    uint8_t freqMapSize = static_cast<uint8_t>(n);
     outFile.write(reinterpret_cast<char*>(&freqMapSize), sizeof(freqMapSize));
 
-    // 频率表写出顺序与 freqList 完全一致，解压时按同样顺序重建
-    for (const auto& p : freqList) {
-        unsigned char byte = p.first;
-        uint64_t freq = p.second;
-        outFile.write(reinterpret_cast<const char*>(&byte), sizeof(byte));
-        outFile.write(reinterpret_cast<const char*>(&freq), sizeof(freq));
+    for (int i = 1; i <= n; ++i) {
+        outFile.write(reinterpret_cast<const char*>(&HT[i].data), sizeof(HT[i].data));
+        outFile.write(reinterpret_cast<const char*>(&HT[i].weight), sizeof(HT[i].weight));
     }
 
     // 生成压缩比特流
@@ -244,33 +221,22 @@ bool compressFile(const string& inputPath, const string& outputPath) {
     delete[] HT;
 
     // 显示压缩信息
-    try {
-        uint64_t originalSize = fs::file_size(inputPath);
-        uint64_t compressedSize = fs::file_size(outputPath);
-        double compressionRatio = static_cast<double>(compressedSize) / originalSize;
+    uint64_t originalSize = fs::file_size(inputPath);
+    uint64_t compressedSize = fs::file_size(outputPath);
+    double compressionRatio = static_cast<double>(compressedSize) / originalSize;
 
-        cout << "压缩成功！" << endl;
-        cout << "原始大小：" << originalSize << " 字节" << endl;
-        cout << "压缩后大小：" << compressedSize << " 字节" << endl;
-        cout << "压缩比：" << compressionRatio << endl;
-    } catch (const fs::filesystem_error& e) {
-        cout << "压缩成功！" << endl;
-        cout << "提示：无法获取文件大小（路径可能包含特殊/非UTF-8字符）" << endl;
-    }
+    cout << "压缩成功！" << endl;
+    cout << "原始大小：" << originalSize << " 字节" << endl;
+    cout << "压缩后大小：" << compressedSize << " 字节" << endl;
+    cout << "压缩比：" << compressionRatio << endl;
 
     return true;
 }
 
 // 解压文件
 bool decompressFile(const string& inputPath, const string& outputPath) {
-    try {
-        if (!fs::exists(inputPath)) {
-            cerr << "错误：压缩文件不存在: " << inputPath << endl;
-            return false;
-        }
-    } catch (const fs::filesystem_error& e) {
-        cerr << "错误：无法处理压缩文件路径（可能是路径中包含特殊/非UTF-8字符）" << endl;
-        cerr << "建议：先把压缩文件拷贝到一个只包含英文和数字的路径下再试。" << endl;
+    if (!fs::exists(inputPath)) {
+        cerr << "错误：压缩文件不存在: " << inputPath << endl;
         return false;
     }
     
@@ -280,35 +246,24 @@ bool decompressFile(const string& inputPath, const string& outputPath) {
         return false;
     }
 
-    // 读取频率表（同时保留读取顺序，确保与压缩时一致）
+    // 读取频率表
     unordered_map<unsigned char, uint64_t> freqMap;
-    vector<pair<unsigned char, uint64_t>> freqList;
-    uint16_t freqMapSize = 0;
+    uint8_t freqMapSize;
     inFile.read(reinterpret_cast<char*>(&freqMapSize), sizeof(freqMapSize));
 
-    if (!inFile || freqMapSize == 0) {
-        cerr << "错误：压缩文件中的频率表无效" << endl;
-        return false;
-    }
-
-    for (uint16_t i = 0; i < freqMapSize; ++i) {
+    for (int i = 0; i < freqMapSize; ++i) {
         unsigned char byte;
         uint64_t freq;
         inFile.read(reinterpret_cast<char*>(&byte), sizeof(byte));
         inFile.read(reinterpret_cast<char*>(&freq), sizeof(freq));
-        if (!inFile) {
-            cerr << "错误：读取频率表失败，压缩文件可能已损坏" << endl;
-            return false;
-        }
         freqMap[byte] = freq;
-        freqList.emplace_back(byte, freq);
     }
 
-    // 重建霍夫曼树（使用与压缩时完全相同的顺序）
-    int n = static_cast<int>(freqList.size());
+    // 重建霍夫曼树
+    int n = freqMap.size();
     HTNode* HT = nullptr;
     HuffmanCode HC = nullptr;
-    HuffmanCodingFromList(HT, HC, freqList, n);
+    HuffmanCoding(HT, HC, freqMap, n);
 
     // 读取补零位数
     uint8_t paddingBits;
@@ -338,7 +293,7 @@ bool decompressFile(const string& inputPath, const string& outputPath) {
     int current = m;  // 从根节点开始
     uint64_t totalBytes = 0;
     uint64_t expectedTotal = 0;
-    for (const auto& pair : freqList) {
+    for (const auto& pair : freqMap) {
         expectedTotal += pair.second;
     }
 
@@ -347,8 +302,6 @@ bool decompressFile(const string& inputPath, const string& outputPath) {
         for (uint64_t i = 0; i < expectedTotal; ++i) {
             outFile.write(reinterpret_cast<char*>(&HT[1].data), sizeof(HT[1].data));
         }
-        // 单字符文件，写出的字节数等于预期
-        totalBytes = expectedTotal;
     } else {
         for (char bit : bitStream) {
             if (bit == '0') {
@@ -386,11 +339,7 @@ bool decompressFile(const string& inputPath, const string& outputPath) {
 
     cout << "解压成功！" << endl;
     cout << "输出文件：" << outputPath << endl;
-    try {
-        cout << "解压后大小：" << fs::file_size(outputPath) << " 字节" << endl;
-    } catch (const fs::filesystem_error& e) {
-        cout << "解压后大小：无法获取（路径可能包含特殊/非UTF-8字符）" << endl;
-    }
+    cout << "解压后大小：" << fs::file_size(outputPath) << " 字节" << endl;
 
     return true;
 }

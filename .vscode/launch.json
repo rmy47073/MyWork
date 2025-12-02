@@ -29,8 +29,8 @@
       "args": [],
       "stopAtEntry": false,
       "externalConsole": true,
-      "cwd": "d:/C++/work2",
-      "program": "d:/C++/work2/build/Debug/outDebug",
+      "cwd": "d:/C++",
+      "program": "d:/C++/build/Debug/outDebug",
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [
