@@ -15,7 +15,7 @@ namespace fs = filesystem;
 // 霍夫曼树节点结构（数组存储方式）
 struct HTNode {
     uint64_t weight;  // 权重（频率）
-    int parent;       // 父节点索引
+    int parent;       // 双亲节点索引
     int lchild;       // 左孩子索引
     int rchild;       // 右孩子索引
     unsigned char data; // 存储的字节（仅叶子节点有效）
@@ -53,7 +53,7 @@ void HuffmanCodingFromList(HTNode*& HT, HuffmanCode& HC,
     int m = 2 * n - 1;  // 总节点数 = 2n-1
     HT = new HTNode[m + 1];  // 下标从1开始
 
-    // 1. 初始化叶子节点（前n个节点，顺序由 freqList 决定）
+    // 1. 根据频率表初始化叶子节点，
     int i = 1;
     for (const auto& pair : freqList) {
         HT[i].weight = pair.second;
@@ -85,7 +85,7 @@ void HuffmanCodingFromList(HTNode*& HT, HuffmanCode& HC,
         HT[i].weight = HT[s1].weight + HT[s2].weight;
     }
 
-    // 3. 从叶子到根逆向求每个字符的霍夫曼编码
+    // 3. 从叶子到根求每个字符的哈夫曼编码
     HC = new char*[n + 1];  // 存储n个字符的编码
     char* cd = new char[n];  // 临时存放编码
     cd[n - 1] = '\0';       // 编码结束符
@@ -115,7 +115,7 @@ void HuffmanCodingFromList(HTNode*& HT, HuffmanCode& HC,
     delete[] cd;
 }
 
-// 构建霍夫曼树并生成编码（基于图片算法思想）
+// 构建霍夫曼树并生成编码
 void HuffmanCoding(HTNode*& HT, HuffmanCode& HC, 
                   const unordered_map<unsigned char, uint64_t>& freqMap, int n) {
     // 旧接口保留，但内部先把无序map转换成按字节值排序的有序列表，
@@ -191,7 +191,7 @@ bool compressFile(const string& inputPath, const string& outputPath) {
     unordered_map<unsigned char, int> dataToIndex;
     for (int i = 1; i <= n; ++i) {
         dataToIndex[HT[i].data] = i;
-        codeMap[HT[i].data] = HC[i];
+        codeMap[HT[i].data] = HC[i];//从字节到哈夫曼编码的映射
     }
 
     // 写入压缩文件
@@ -209,8 +209,9 @@ bool compressFile(const string& inputPath, const string& outputPath) {
     for (const auto& p : freqList) {
         unsigned char byte = p.first;
         uint64_t freq = p.second;
-        outFile.write(reinterpret_cast<const char*>(&byte), sizeof(byte));
-        outFile.write(reinterpret_cast<const char*>(&freq), sizeof(freq));
+        outFile.write(reinterpret_cast<const char*>(&byte), sizeof(byte));//写入字节
+        outFile.write(reinterpret_cast<const char*>(&freq), sizeof(freq));//写入频率
+       
     }
 
     // 生成压缩比特流
@@ -336,8 +337,8 @@ bool decompressFile(const string& inputPath, const string& outputPath) {
 
     int m = 2 * n - 1;
     int current = m;  // 从根节点开始
-    uint64_t totalBytes = 0;
-    uint64_t expectedTotal = 0;
+    uint64_t totalBytes = 0;//读取的总字节数
+    uint64_t expectedTotal = 0;//读取的预期字节数
     for (const auto& pair : freqList) {
         expectedTotal += pair.second;
     }
