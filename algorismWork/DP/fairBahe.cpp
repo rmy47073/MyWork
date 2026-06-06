@@ -1,51 +1,56 @@
-/**
- * 拔河比赛公平分配问题之动态规划解法
- * 
- * 问题描述：
- *   将n个队员分成两队进行拔河比赛，使两队总重量差最小
- * 
- * 核心思路：
- *   找到一个子集，其和尽可能接近总重量的一半
- */
+/*尽可能公平的拔河游戏 某科研团队共有 n 人，体重分别是w1, w2, …, wn（都是正整数）。
+
+为增进成员感情，该团队决定组织一场友谊拔河赛。考虑到其中或有”横推八马倒，倒曳九牛回”的大力士，因此这场友谊拔河赛不要求双方人数相当，而是希望两边的总体重差达到最小。
+输入
+    第一行 ：n （不超过<20001）
+    之后是 n 个人的体重（都是整数，且所有人体重和不超过20000）
+输出
+    非增序输出两个队伍的总体重，以一个空格分隔
+
+核心思路：从 n 个人中选一个子集，使其总重量尽可能接近 sum/2。
+转化为子集和问题（0-1 背包），用布尔 DP 求解。
+*/
 #include <iostream>
-#include <vector>
+#include <bitset>
 using namespace std;
 
 int main() {
-    // 输入队员数量
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+
     int n;
     cin >> n;
-    // 存储队员体重
     vector<int> w(n);
-    // 计算总体重
     int sum = 0;
     for (int i = 0; i < n; i++) {
         cin >> w[i];
-        sum += w[i];
+        sum += w[i];//算出总体重
     }
-    // dp[j]: 是否能组成重量j
-    vector<bool> dp(sum / 2 + 1, false);
-    // 初始状态：可以组成重量0
-    dp[0] = true;
 
-    // 核心：0-1背包问题，逆序遍历避免重复选择
-    for (int i = 0; i<n; i++) {           // 遍历每个队员
-        for (int j = sum/2; j >= w[i]; j--) { // 逆序遍历重量
-            if (dp[j-w[i]]) {             // 如果可组成j-w[i]的重量，则j的重量也可组成
-                dp[j]=true;
-            }
+    // dp[s] = true 表示存在某个子集总重为 s
+    // 只需要开到 sum/2（超过一半的不用考虑）
+    vector<bool> dp(sum / 2 + 1, false);
+    dp[0] = true;  // 空集的和为 0
+
+    // 0-1 背包：每个人选或不选
+    // 逆序更新保证每个人最多用一次
+    for (int i = 0; i < n; i++) {
+        for (int s = sum / 2; s >= w[i]; s--) {
+            if (dp[s - w[i]])
+                dp[s] = true;
         }
     }
-    // 寻找最接近sum/2的可组成重量
+
+    // 从 sum/2 往下找第一个可达的和，即最接近 sum/2 的子集
     int a, b;
-    for (int j = sum / 2; j >= 0; j--) {
-        if (dp[j]) {                      // 找到第一个可组成的重量
-            a = j;
-            b = sum - j;
+    for (int s = sum / 2; s >= 0; s--) {
+        if (dp[s]) {
+            a = s;
+            b = sum - s;
             break;
         }
     }
-    // 输出两队重量（先大后小）
-    cout << max(a, b) << " " << min(a, b);
+    // 非增序输出
+    cout << max(a, b) << " " << min(a, b) << endl;
     return 0;
 }
